@@ -1,6 +1,6 @@
 #ifndef UV_MULTIPLEX_H
 #define UV_MULTIPLEX_H
-
+#include <uv.h>
 #ifndef fatal
 #define fatal(e) { \
         assert(0 != e); \
