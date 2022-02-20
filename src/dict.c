@@ -18,7 +18,7 @@ typedef struct dict_data_pair_t
   struct dict_data_pair_t *next;
   char *key;
   uint32_t hash;
-  char data[0];
+  char val[0];
 } dict_data_pair;
 inline static dict_data_pair *dict_data_pair_create(const char *key, uint32_t hash, size_t len)
 {
@@ -190,7 +190,7 @@ void *dict_put(dict_t *d, char *key, void *val, size_t val_len)
     return NULL;
   }
   data = dict_data_pair_create(key, hash, val_len);
-  memcpy(data->data, val, val_len);
+  memcpy(&data->val, val, val_len);
   if (d->members[index] == NULL)
   {
     d->members[index] = data;
@@ -202,20 +202,20 @@ void *dict_put(dict_t *d, char *key, void *val, size_t val_len)
   }
   __sync_fetch_and_add(&d->member_count[index], 1);
   __sync_fetch_and_add(&d->count, 1);
-  return (void *)&data->data;
+  return (void *)&data->val;
 }
 void *dict_get(dict_t *d, char *key)
 {
-  void *data = NULL;
+  void *val = NULL;
   dict_data_pair *prev = NULL;
   uint32_t hash, index;
   size_t key_len;
   dict_data_pair *dp = dict_fetch(d, key, &key_len, &hash, &index, &prev);
   if (dp != NULL)
   {
-    data = dp->data;
+    val = dp->val;
   }
-  return data;
+  return val;
 }
 int dict_del(dict_t *d, char *key, dict_data_free_fn fn)
 {
@@ -237,7 +237,7 @@ int dict_del(dict_t *d, char *key, dict_data_free_fn fn)
     free(dp->key);
     if (fn != NULL)
     {
-      fn(dp->data);
+      fn(dp->val);
     }
     free(dp);
     __sync_fetch_and_sub(&d->member_count[index], 1);
@@ -258,7 +258,7 @@ void dict_dump(dict_t *d, dict_cb_fn cb)
       while (dp != NULL)
       {
         char *key = dp->key;
-        void *data = (void *)&dp->data;
+        void *data = (void *)&dp->val;
         cb(key, data);
         dp = dp->next;
       }
@@ -279,7 +279,7 @@ void dict_deinit(dict_t *d, dict_data_free_fn free_cb)
         free(dp->key);
         if (free_cb != NULL)
         {
-          void *val = dp->data;
+          void *val = &dp->val;
           free_cb(val);
         }
 

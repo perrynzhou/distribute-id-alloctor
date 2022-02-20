@@ -10,9 +10,10 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <assert.h>
+#include <stdlib.h>
 #include "kv_db.h"
 #include "hashfn.h"
-kv_schema_t *kv_schema_alloc(int index, const char *schema_name, void *ctx)
+kv_schema_t *kv_schema_alloc(const char *schema_name, void *ctx)
 {
 
   assert(ctx != NULL);
@@ -23,8 +24,11 @@ kv_schema_t *kv_schema_alloc(int index, const char *schema_name, void *ctx)
   assert(schema != NULL);
   assert(wiredtiger_open(db->database_dir, NULL, "create", &schema->conn) != -1);
   assert(schema->conn->open_session(schema->conn, NULL, NULL, &schema->session) != -1);
-  assert(schema->session->create(schema->session, &schema_name, "key_format=S,value_format=S") != -1);
-  snprintf((char *)&schema->schema_name, schema_sz, "%s", schema_name);
+  char schema_buf[256] = {'\0'};
+  snprintf(&schema_buf,256,"table:%s",schema_name);
+  assert(schema->session->create(schema->session, &schema_buf, "key_format=S,value_format=S") != -1);
+  strncpy((char *)&schema->schema_name,  schema_name,schema_sz);
+  schema->schema_name[schema_sz]='\0';
   schema->ctx = ctx;
 
   return schema;
@@ -55,7 +59,7 @@ kv_db_t *kv_db_alloc(const char *database_name, const char *database_dir)
     db->database_name = strdup(database_name);
 
     db->database_dir = strdup(database_dir);
-    dict_init(db->schema_ctx, SCHEMA_LIMIT, hash_fnv1_64);
+    db->schema_ctx = dict_create(SCHEMA_LIMIT, hash_fnv1_64);
     return db;
   }
   return NULL;
@@ -69,6 +73,18 @@ int kv_db_put(kv_db_t *db, char *schema_name, char *key, void *val)
   cursor->set_value(cursor, val);
   return cursor->insert(cursor);
 }
+int kv_db_get(kv_db_t *db, char *schema_name, char *key, void *val_ptr)
+{
+  kv_schema_t *schema = (kv_schema_t *)dict_get(db->schema_ctx, key);
+  WT_CURSOR *cursor = schema->cursor;
+  cursor->set_key(cursor, key);
+  if (cursor->search(cursor) != 0)
+  {
+    return -1;
+  }
+  cursor->get_value(cursor, &val_ptr);
+  return 0;
+}
 int kv_db_del(kv_db_t *db, char *schema_name, char *key)
 {
   kv_schema_t *schema = (kv_schema_t *)dict_get(db->schema_ctx, key);
@@ -76,18 +92,28 @@ int kv_db_del(kv_db_t *db, char *schema_name, char *key)
   cursor->set_key(cursor, key);
   return cursor->remove(cursor);
 }
-inline static void kv_schema_free_cb(void *ptr) {
+inline static void kv_schema_free_cb(void *ptr)
+{
   kv_schema_t *schema = (kv_schema_t *)ptr;
   kv_schema_destroy(schema);
 }
 void *kv_db_destroy(kv_db_t *db)
 {
-   if(db !=NULL) {
+  if (db != NULL)
+  {
 
-     dict_deinit(db->schema_ctx,kv_schema_free_cb);
-     free(db->database_dir);
-     free(db->database_name);
-   }
+    dict_deinit(db->schema_ctx, kv_schema_free_cb);
+    free(db->database_dir);
+    free(db->database_name);
+  }
+}
+kv_schema_t *kv_db_fetch_schema(kv_db_t *db, char *schema_name)
+{
+  if (db == NULL || schema_name == NULL)
+  {
+    return -1;
+  }
+  return (kv_schema_t *)dict_get(db->schema_ctx, schema_name);
 }
 int kv_db_register_schema(kv_db_t *db, kv_schema_t *schema)
 {
@@ -105,9 +131,9 @@ int kv_db_register_schema(kv_db_t *db, kv_schema_t *schema)
 }
 void kv_db_unregister_schema(kv_db_t *db, char *schema_name)
 {
-  if (db == NULL || schema_name == NULL)
+  if (db != NULL && schema_name != NULL)
   {
-    return -1;
+
+    dict_del(db->schema_ctx, schema_name, NULL);
   }
-  dict_del(db->schema_ctx, schema_name, NULL);
 }
