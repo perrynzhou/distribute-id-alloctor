@@ -135,7 +135,7 @@ static uint64_t dict_jump_consistent(uint64_t key, uint32_t num_buckets)
   value = (b < 0) ? (~b + 1) : b;
   return value;
 }
-int dict_init(dict *d, uint32_t max_count, dict_hash_fn hash_fn)
+int dict_init(dict_t *d, uint32_t max_count, dict_hash_fn hash_fn)
 {
   memset(d, 0, sizeof(*d));
   d->max_count = max_count;
@@ -145,9 +145,9 @@ int dict_init(dict *d, uint32_t max_count, dict_hash_fn hash_fn)
   d->member_count = (uint32_t *)calloc(max_count, sizeof(uint32_t));
   return 0;
 }
-dict *dict_create(uint32_t max_count, dict_hash_fn hash_fn)
+dict_t *dict_create(uint32_t max_count, dict_hash_fn hash_fn)
 {
-  dict *d = (dict *)calloc(1, sizeof(dict));
+  dict_t *d = (dict_t *)calloc(1, sizeof(dict_t));
   if (dict_init(d, max_count, hash_fn) != 0)
   {
     free(d);
@@ -155,7 +155,7 @@ dict *dict_create(uint32_t max_count, dict_hash_fn hash_fn)
   }
   return d;
 }
-static dict_data_pair *dict_fetch(dict *d, const char *key, size_t *key_len_ptr, uint32_t *hash_ptr, uint32_t *index_ptr, dict_data_pair **prev)
+static dict_data_pair *dict_fetch(dict_t *d, const char *key, size_t *key_len_ptr, uint32_t *hash_ptr, uint32_t *index_ptr, dict_data_pair **prev)
 {
   size_t key_len = strlen(key);
   uint32_t hash = d->hash_fn(key, key_len);
@@ -179,7 +179,7 @@ static dict_data_pair *dict_fetch(dict *d, const char *key, size_t *key_len_ptr,
   }
   return data;
 }
-void *dict_put(dict *d, char *key, void *val, size_t val_len)
+void *dict_put(dict_t *d, char *key, void *val, size_t val_len)
 {
   dict_data_pair *prev = NULL;
   uint32_t hash, index;
@@ -204,7 +204,7 @@ void *dict_put(dict *d, char *key, void *val, size_t val_len)
   __sync_fetch_and_add(&d->count, 1);
   return (void *)&data->data;
 }
-void *dict_get(dict *d, char *key)
+void *dict_get(dict_t *d, char *key)
 {
   void *data = NULL;
   dict_data_pair *prev = NULL;
@@ -217,7 +217,7 @@ void *dict_get(dict *d, char *key)
   }
   return data;
 }
-int dict_del(dict *d, char *key, dict_data_free_fn fn)
+int dict_del(dict_t *d, char *key, dict_data_free_fn fn)
 {
   dict_data_pair *prev = NULL;
   uint32_t hash, index;
@@ -246,7 +246,7 @@ int dict_del(dict *d, char *key, dict_data_free_fn fn)
   }
   return -1;
 }
-void dict_dump(dict *d, dict_cb_fn cb)
+void dict_dump(dict_t *d, dict_cb_fn cb)
 {
   size_t i = 0;
   for (; i < d->max_count; i++)
@@ -265,7 +265,7 @@ void dict_dump(dict *d, dict_cb_fn cb)
     }
   }
 }
-void dict_deinit(dict *d, dict_data_free_fn free_cb)
+void dict_deinit(dict_t *d, dict_data_free_fn free_cb)
 {
   size_t i;
   for (i = 0; i < d->max_count; i++)
@@ -291,7 +291,7 @@ void dict_deinit(dict *d, dict_data_free_fn free_cb)
     }
   }
 }
-void dict_destroy(dict *d, dict_data_free_fn free_cb)
+void dict_destroy(dict_t *d, dict_data_free_fn free_cb)
 {
   if (d != NULL)
   {

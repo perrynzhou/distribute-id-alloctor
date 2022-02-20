@@ -17,7 +17,7 @@
 
 #define SCHEMA_LIMIT (1024)
 
-typedef struct kv_schema_t
+typedef struct 
 {
  
   WT_CONNECTION *conn;
@@ -25,15 +25,15 @@ typedef struct kv_schema_t
   WT_CURSOR *cursor;
   void *ctx;
    char *schema_name[0]
-} kv_schema;
+} kv_schema_t;
 
-typedef struct kv_db_t
+typedef struct 
 {
   char *database_name;
   char *database_dir;
-  dict *schema_ctx;
+  dict_t *schema_ctx;
   // struct kv_schema **schema_ctx;
-} kv_db;
+} kv_db_t;
 
 const char *sys_schemas_meta[] = {
     "entries",
@@ -41,13 +41,13 @@ const char *sys_schemas_meta[] = {
     "state",
 };
 
-kv_schema *kv_schema_alloc(int index, const char *name, void *ctx);
-void kv_schema_destroy(kv_schema *schema);
+kv_schema_t *kv_schema_alloc(int index, const char *name, void *ctx);
+void kv_schema_destroy(kv_schema_t *schema);
 
-kv_db *kv_db_alloc(const char *database_name, const char *database_dir);
-int kv_db_register_schema(kv_db *db, kv_schema *schema);
-void kv_db_unregister_schema(kv_db *db, char *schema_name);
-int kv_db_put(kv_db *db, char *schema_name, char *key, void *val);
-int kv_db_del(kv_db *db, char *schema_name, char *key);
-void *kv_db_destroy(kv_db *db);
+kv_db_t *kv_db_alloc(const char *database_name, const char *database_dir);
+int kv_db_register_schema(kv_db_t *db, kv_schema_t *schema);
+void kv_db_unregister_schema(kv_db_t *db, char *schema_name);
+int kv_db_put(kv_db_t *db, char *schema_name, char *key, void *val);
+int kv_db_del(kv_db_t *db, char *schema_name, char *key);
+void *kv_db_destroy(kv_db_t *db);
 #endif
