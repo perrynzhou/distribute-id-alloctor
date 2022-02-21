@@ -25,7 +25,7 @@ kv_schema_t *kv_schema_alloc(const char *schema_name, void *ctx)
   assert(db->conn->open_session(db->conn, NULL, NULL, &schema->session) != -1);
   char schema_buf[256] = {'\0'};
   snprintf(&schema_buf, 256, "table:%s", schema_name);
-  assert(schema->session->create(schema->session, &schema_buf, "key_format=S,value_format=S") != -1);
+  assert(schema->session->create(schema->session, &schema_buf, "key_format=u,value_format=u") != -1);
   assert(schema->session->open_cursor(schema->session, &schema_buf, NULL, "overwrite=false", &schema->cursor) != -1);
   strncpy((char *)&schema->schema_name, schema_name, schema_sz);
   schema->schema_name[schema_sz] = '\0';
