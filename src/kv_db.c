@@ -14,6 +14,12 @@
 #include "kv_db.h"
 #include "hashfn.h"
 const char *schema_format = "key_format=u,value_format=u";
+
+inline static void wt_item_init(WT_ITEM *item,void *data,size_t size) {
+  item->data = data;
+  item->size=size;
+}
+
 kv_schema_t *kv_schema_alloc(const char *schema_name, void *ctx,bool is_force_drop)
 {
   assert(ctx != NULL);
@@ -75,32 +81,39 @@ kv_db_t *kv_db_alloc(const char *database_name, const char *database_dir)
   }
   return NULL;
 }
-int kv_db_put(kv_db_t *db, char *schema_name, char *key, void *val)
+int kv_db_set(kv_db_t *db, char *schema_name, void *key, size_t key_sz, void *val,size_t val_sz)
 {
 
   kv_schema_t *schema = (kv_schema_t *)dict_get(db->schema_ctx, schema_name);
   WT_CURSOR *cursor = schema->cursor;
-  cursor->set_key(cursor, key);
-  cursor->set_value(cursor, val);
+   WT_ITEM key_item, value_item;
+   wt_item_init(&key_item,key,key_sz);
+   wt_item_init(&value_item,val,val_sz);
+  cursor->set_key(cursor, &key_item);
+  cursor->set_value(cursor,&value_item);
   return cursor->insert(cursor);
 }
-int kv_db_get(kv_db_t *db, char *schema_name, char *key, void *val_ptr)
+void *kv_db_get(kv_db_t *db, char *schema_name, void *key,size_t key_sz)
 {
   kv_schema_t *schema = (kv_schema_t *)dict_get(db->schema_ctx, schema_name);
   WT_CURSOR *cursor = schema->cursor;
-  cursor->set_key(cursor, key);
+  WT_ITEM key_item, value_item;
+  wt_item_init(&key_item,key,key_sz);
+  cursor->set_key(cursor,&key_item);
   if (cursor->search(cursor) != 0)
   {
-    return -1;
+    return NULL;
   }
-  cursor->get_value(cursor, val_ptr);
-  return 0;
+  cursor->get_value(cursor, &value_item);
+  return  value_item.data;
 }
-int kv_db_del(kv_db_t *db, char *schema_name, char *key)
+int kv_db_del(kv_db_t *db, char *schema_name, void *key,size_t key_sz)
 {
   kv_schema_t *schema = (kv_schema_t *)dict_get(db->schema_ctx, schema_name);
   WT_CURSOR *cursor = schema->cursor;
-  cursor->set_key(cursor, key);
+    WT_ITEM key_item, value_item;
+  wt_item_init(&key_item,key,key_sz);
+  cursor->set_key(cursor, &key_item);
   return cursor->remove(cursor);
 }
 inline static void kv_schema_free_cb(void *ptr)

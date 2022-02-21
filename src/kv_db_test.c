@@ -50,19 +50,13 @@ const  char *schemas_meta[] = {
         .name = "abcd",
         .ver = i + 1,
     };
-            WT_ITEM key, value;
-    key.data = strdup("abcd");
-    key.size = strlen(key.data);
-
-    value.data = &inst;
-    value.size = sizeof(inst);
+ 
     fprintf(stdout, "set demo_t info :id=%d,name=%s,ver=%d\n", inst.id, inst.name, inst.ver);
-
-    int ret = kv_db_put(db, schema_name, &key, &value);
-     WT_ITEM value2;
-    ret = kv_db_get(db, schema_name, &key, &value2);
-    demo_t *inst2 =  value2.data;
+    char key[256] = {'\0'};
+    snprintf(&key,256,"%s-%d","test",i);
+    int ret = kv_db_set(db, schema_name,&key, strlen(&key),&inst,sizeof(inst));
+   demo_t *inst2 =(demo_t *) kv_db_get(db, schema_name, &key,strlen(&key));
     fprintf(stdout, "get demo_t info :id=%d,name=%s,ver=%d\n", inst2->id, inst2->name, inst2->ver);
-    kv_db_del(db, schema_name, "demo");
+    kv_db_del(db, schema_name, &key,strlen(&key));
   }
 }
