@@ -20,7 +20,6 @@
 typedef struct
 {
 
-  WT_CONNECTION *conn;
   WT_SESSION *session;
   WT_CURSOR *cursor;
   void *ctx;
@@ -32,6 +31,8 @@ typedef struct
   char *database_name;
   char *database_dir;
   dict_t *schema_ctx;
+   WT_CONNECTION *conn;
+
   // struct kv_schema **schema_ctx;
 } kv_db_t;
 

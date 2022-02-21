@@ -22,7 +22,7 @@ typedef struct
 } dict_t;
 int dict_init(dict_t *d, uint32_t max_count, dict_hash_fn hash_fn);
 dict_t *dict_create(uint32_t max_count, dict_hash_fn hash_fn);
-void *dict_put(dict_t *d, char *key, void *data,size_t data_len);
+void *dict_put(dict_t *d, char *key, void *val);
 void *dict_get(dict_t *d, char *key);
 int dict_del(dict_t *d, char *key,dict_data_free_fn fn);
 void dict_deinit(dict_t *d,dict_data_free_fn free_cb);

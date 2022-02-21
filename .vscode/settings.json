@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "tpl.h": "c"
+        "tpl.h": "c",
+        "typeinfo": "c"
     }
 }

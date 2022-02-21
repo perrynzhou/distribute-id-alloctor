@@ -12,114 +12,24 @@
 #define DM_DELTA 0x9E3779B9
 #define DM_FULLROUNDS 10
 #define DM_PARTROUNDS 6
-
+#if !defined(get16bits)
+#define get16bits(d) ((((uint32_t)(((const uint8_t *)(d))[1])) << 8) + (uint32_t)(((const uint8_t *)(d))[0]))
+#endif
 typedef struct dict_data_pair_t
 {
   struct dict_data_pair_t *next;
   char *key;
-  uint32_t hash;
-  char val[0];
+  void *val;
 } dict_data_pair;
-inline static dict_data_pair *dict_data_pair_create(const char *key, uint32_t hash, size_t len)
+inline static dict_data_pair *dict_data_pair_create(const char *key,void *val)
 {
-  dict_data_pair *dp = (dict_data_pair *)calloc(1, sizeof(dict_data_pair) + len);
+  dict_data_pair *dp = (dict_data_pair *)calloc(1, sizeof(dict_data_pair));
   dp->next = NULL;
-  dp->hash = hash;
   dp->key = strdup(key);
+  dp->val = val;
   return dp;
 }
-inline static uint32_t __pad(int len)
-{
-  uint32_t pad = 0;
 
-  pad = (uint32_t)len | ((uint32_t)len << 8);
-  pad |= pad << 16;
-
-  return pad;
-}
-static int dm_round(int rounds, uint32_t *array, uint32_t *h0, uint32_t *h1)
-{
-  uint32_t sum = 0;
-  int n = 0;
-  uint32_t b0 = 0;
-  uint32_t b1 = 0;
-
-  b0 = *h0;
-  b1 = *h1;
-
-  n = rounds;
-
-  do
-  {
-    sum += DM_DELTA;
-    b0 += ((b1 << 4) + array[0]) ^ (b1 + sum) ^ ((b1 >> 5) + array[1]);
-    b1 += ((b0 << 4) + array[2]) ^ (b0 + sum) ^ ((b0 >> 5) + array[3]);
-  } while (--n);
-
-  *h0 += b0;
-  *h1 += b1;
-
-  return 0;
-}
-static uint32_t dict_default_hash_fn(const char *msg, int len)
-{
-  uint32_t h0 = 0x9464a485;
-  uint32_t h1 = 0x542e1a94;
-  uint32_t array[4];
-  uint32_t pad = 0;
-  int i = 0;
-  int j = 0;
-  int full_quads = 0;
-  int full_words = 0;
-  int full_bytes = 0;
-  uint32_t *intmsg = NULL;
-  int word = 0;
-
-  intmsg = (uint32_t *)msg;
-  pad = __pad(len);
-
-  full_bytes = len;
-  full_words = len / 4;
-  full_quads = len / 16;
-
-  for (i = 0; i < full_quads; i++)
-  {
-    for (j = 0; j < 4; j++)
-    {
-      word = *intmsg;
-      array[j] = word;
-      intmsg++;
-      full_words--;
-      full_bytes -= 4;
-    }
-    dm_round(DM_PARTROUNDS, &array[0], &h0, &h1);
-  }
-
-  for (j = 0; j < 4; j++)
-  {
-    if (full_words)
-    {
-      word = *intmsg;
-      array[j] = word;
-      intmsg++;
-      full_words--;
-      full_bytes -= 4;
-    }
-    else
-    {
-      array[j] = pad;
-      while (full_bytes)
-      {
-        array[j] <<= 8;
-        array[j] |= msg[len - full_bytes];
-        full_bytes--;
-      }
-    }
-  }
-  dm_round(DM_FULLROUNDS, &array[0], &h0, &h1);
-
-  return (uint32_t)(h0 ^ h1);
-}
 static uint64_t dict_jump_consistent(uint64_t key, uint32_t num_buckets)
 {
 
@@ -134,6 +44,61 @@ static uint64_t dict_jump_consistent(uint64_t key, uint32_t num_buckets)
   }
   value = (b < 0) ? (~b + 1) : b;
   return value;
+}
+uint32_t dict_default_hash_fn(const char *key, size_t key_length)
+{
+    uint32_t hash = 0, tmp;
+    int rem;
+
+    if (key_length <= 0 || key == NULL)
+    {
+        return 0;
+    }
+
+    rem = key_length & 3;
+    key_length >>= 2;
+
+    for (; key_length > 0; key_length--)
+    {
+        hash += get16bits(key);
+        tmp = (get16bits(key + 2) << 11) ^ hash;
+        hash = (hash << 16) ^ tmp;
+        key += 2 * sizeof(uint16_t);
+        hash += hash >> 11;
+    }
+
+    switch (rem)
+    {
+    case 3:
+        hash += get16bits(key);
+        hash ^= hash << 16;
+        hash ^= (uint32_t)key[sizeof(uint16_t)] << 18;
+        hash += hash >> 11;
+        break;
+
+    case 2:
+        hash += get16bits(key);
+        hash ^= hash << 11;
+        hash += hash >> 17;
+        break;
+
+    case 1:
+        hash += (unsigned char)(*key);
+        hash ^= hash << 10;
+        hash += hash >> 1;
+
+    default:
+        break;
+    }
+
+    hash ^= hash << 3;
+    hash += hash >> 5;
+    hash ^= hash << 4;
+    hash += hash >> 17;
+    hash ^= hash << 25;
+    hash += hash >> 6;
+
+    return hash;
 }
 int dict_init(dict_t *d, uint32_t max_count, dict_hash_fn hash_fn)
 {
@@ -155,21 +120,19 @@ dict_t *dict_create(uint32_t max_count, dict_hash_fn hash_fn)
   }
   return d;
 }
-static dict_data_pair *dict_fetch(dict_t *d, const char *key, size_t *key_len_ptr, uint32_t *hash_ptr, uint32_t *index_ptr, dict_data_pair **prev)
+static dict_data_pair *dict_find(dict_t *d, const char *key, uint32_t  *index_ptr,dict_data_pair **prev)
 {
-  size_t key_len = strlen(key);
+    size_t key_len = strlen(key);
   uint32_t hash = d->hash_fn(key, key_len);
   uint32_t index = dict_jump_consistent(hash, d->max_count);
-  *index_ptr = index;
-  *hash_ptr = hash;
-  *key_len_ptr = key_len;
+  *index_ptr =index;
   dict_data_pair *cur = NULL;
   dict_data_pair *data = NULL;
   if (d->member_count[index] > 0)
   {
     for (cur = (dict_data_pair *)d->members[index]; cur != NULL; cur = cur->next)
     {
-      if (hash == cur->hash && strncmp(cur->key, key, key_len) == 0)
+      if (strncmp(cur->key, key, key_len) == 0)
       {
         data = cur;
         break;
@@ -179,18 +142,18 @@ static dict_data_pair *dict_fetch(dict_t *d, const char *key, size_t *key_len_pt
   }
   return data;
 }
-void *dict_put(dict_t *d, char *key, void *val, size_t val_len)
+void *dict_put(dict_t *d, char *key, void *val)
 {
-  dict_data_pair *prev = NULL;
-  uint32_t hash, index;
-  size_t key_len;
-  dict_data_pair *data = dict_fetch(d, key, &key_len, &hash, &index, &prev);
+
+  uint32_t index = 0;
+    dict_data_pair *prev = NULL;
+
+  dict_data_pair *data = dict_find(d, key, &index,&prev);
   if (data != NULL)
   {
     return NULL;
   }
-  data = dict_data_pair_create(key, hash, val_len);
-  memcpy(&data->val, val, val_len);
+  data = dict_data_pair_create(key,val);
   if (d->members[index] == NULL)
   {
     d->members[index] = data;
@@ -207,10 +170,9 @@ void *dict_put(dict_t *d, char *key, void *val, size_t val_len)
 void *dict_get(dict_t *d, char *key)
 {
   void *val = NULL;
+  uint32_t index = 0;
   dict_data_pair *prev = NULL;
-  uint32_t hash, index;
-  size_t key_len;
-  dict_data_pair *dp = dict_fetch(d, key, &key_len, &hash, &index, &prev);
+  dict_data_pair *dp = dict_find(d, key, &index,&prev);
   if (dp != NULL)
   {
     val = dp->val;
@@ -220,9 +182,8 @@ void *dict_get(dict_t *d, char *key)
 int dict_del(dict_t *d, char *key, dict_data_free_fn fn)
 {
   dict_data_pair *prev = NULL;
-  uint32_t hash, index;
-  size_t key_len;
-  dict_data_pair *dp = dict_fetch(d, key, &key_len, &hash, &index, &prev);
+  uint32_t index = 0;
+  dict_data_pair *dp = dict_find(d, key, &index,&prev);
   if (dp != NULL)
   {
     if (prev == NULL)
