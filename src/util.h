@@ -7,6 +7,7 @@
 
 #ifndef _UTIL_H
 #define _UTIL_H
+#include <stdio.h>
 #define container_of(ptr, type, member) ({ \
                         const typeof( ((type*)0)->member ) \
                         * __mptr = ((void*)(ptr)); \
@@ -18,5 +19,4 @@
 
 #define atomic_add(ptr,val) (__sync_fetch_and_add(ptr,val))
 #define atomic_sub(ptr,val) (__sync_fetch_and_sub(ptr,val))
-
 #endif

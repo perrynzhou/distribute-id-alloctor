@@ -21,13 +21,19 @@ typedef struct
 int main(int argc, char *argv[])
 {
 
+const  char *schemas_meta[] = {
+    "entries",
+    "docs",
+    "state",
+};
+
   kv_db_t *db = kv_db_alloc(argv[1], argv[2]);
-  size_t count = sizeof(sys_schemas_meta) / sizeof(sys_schemas_meta[0]);
+  size_t count = sizeof(schemas_meta) / sizeof(schemas_meta[0]);
   int i = 0;
   for (; i < count; i++)
   {
-    char *schema_name = sys_schemas_meta[i];
-    kv_schema_t *schema = kv_schema_alloc(schema_name, db);
+    char *schema_name = schemas_meta[i];
+    kv_schema_t *schema = kv_schema_alloc(schema_name, db,false);
     kv_db_register_schema(db, schema);
     /*
     kv_schema_t *tmp_schema = kv_db_fetch_schema(db, schema_name);

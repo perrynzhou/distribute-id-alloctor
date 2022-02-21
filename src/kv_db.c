@@ -13,9 +13,9 @@
 #include <stdlib.h>
 #include "kv_db.h"
 #include "hashfn.h"
-kv_schema_t *kv_schema_alloc(const char *schema_name, void *ctx)
+const char *schema_format = "key_format=u,value_format=u";
+kv_schema_t *kv_schema_alloc(const char *schema_name, void *ctx,bool is_force_drop)
 {
-
   assert(ctx != NULL);
   kv_db_t *db = (kv_db_t *)ctx;
   size_t schema_sz = strlen(schema_name);
@@ -25,11 +25,16 @@ kv_schema_t *kv_schema_alloc(const char *schema_name, void *ctx)
   assert(db->conn->open_session(db->conn, NULL, NULL, &schema->session) != -1);
   char schema_buf[256] = {'\0'};
   snprintf(&schema_buf, 256, "table:%s", schema_name);
-  assert(schema->session->create(schema->session, &schema_buf, "key_format=u,value_format=u") != -1);
+  
+  if(is_force_drop) {
+      assert(schema->session->drop(schema->session, &schema_buf, schema_format) != -1);
+  }
+  assert(schema->session->create(schema->session, &schema_buf, schema_format) != -1);
   assert(schema->session->open_cursor(schema->session, &schema_buf, NULL, "overwrite=false", &schema->cursor) != -1);
   strncpy((char *)&schema->schema_name, schema_name, schema_sz);
   schema->schema_name[schema_sz] = '\0';
   schema->ctx = ctx;
+  schema->schema_format = strdup(schema_format);
   fprintf(stdout, "create schema %s succ\n", (char *)&schema->schema_name);
   return schema;
 }
@@ -39,6 +44,8 @@ void kv_schema_destroy(kv_schema_t *schema)
   {
     kv_db_t *db = (kv_db_t *)schema->ctx;
     schema->cursor->close(schema->cursor);
+    schema->session->drop(schema->session,&schema->schema_name,schema->schema_format);
+    schema->session->close(schema->session,NULL);
     free(schema);
     schema = NULL;
   }
@@ -137,7 +144,6 @@ void kv_db_unregister_schema(kv_db_t *db, char *schema_name)
 {
   if (db != NULL && schema_name != NULL)
   {
-
     dict_del(db->schema_ctx, schema_name, NULL);
   }
 }
