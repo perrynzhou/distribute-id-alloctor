@@ -237,7 +237,7 @@ static void peer_msg_send(uv_stream_t *s, tpl_node *tn, uv_buf_t *buf, char *dat
 
 /** Check if the ticket has already been issued
  * @return 0 if not unique; otherwise 1 */
-static int check_if_ticket_exists(const unsigned int ticket)
+static int check_if_ticket_exists(kv_db_t *db,const unsigned int *ticket)
 {
     MDB_txn *txn;
 
@@ -245,38 +245,26 @@ static int check_if_ticket_exists(const unsigned int ticket)
     if (0 != e)
         mdb_fatal(e);
 
-    MDB_val v, k = {.mv_size = sizeof(ticket), .mv_data = (void *)&ticket};
 
-    e = mdb_get(txn, sv->tickets, &k, &v);
-    switch (e)
-    {
-    case 0:
-        break;
-    case MDB_NOTFOUND:
-        e = mdb_txn_commit(txn);
-        if (0 != e)
-            mdb_fatal(e);
+    void *ptr = kv_db_get(db,sys_schemas_meta[SCHEMA_DOCS_IDX],"ticket",6);
+    if(ptr==NULL) {
         return 0;
-    default:
-        mdb_fatal(e);
     }
-
-    e = mdb_txn_commit(txn);
-    if (0 != e)
-        mdb_fatal(e);
-
+    ticket =(int *)ptr;
     return 1;
 }
 
-static unsigned int generate_ticket()
+static unsigned int generate_ticket(server_t *sv)
 {
     unsigned int ticket;
-
+    kv_db_t *db = sv->db;
+    
+    kv_schema_t *schema = kv_db_fetch_schema(db,sys_schemas_meta[SCHEMA_DOCS]);
     do
     {
         // TODO need better random number generator
         ticket = rand();
-    } while (check_if_ticket_exists(ticket));
+    } while (check_if_ticket_exists(db,&ticket));
     return ticket;
 }
 
@@ -649,7 +637,7 @@ static int append_cfg_change(server_t *sv,
 }
 
 /** Deserialize a single log entry from appendentries message */
-static void __deserialize_appendentries_payload(msg_entry_t *out,
+static void deserialize_appendentries_payload(msg_entry_t *out,
                                                 peer_connection_t *conn,
                                                 void *img,
                                                 size_t sz)
@@ -667,7 +655,7 @@ static void __deserialize_appendentries_payload(msg_entry_t *out,
 }
 
 /** Parse raft peer traffic using binary protocol, and respond to message */
-static int __deserialize_and_handle_msg(void *img, size_t sz, void *data)
+static int deserialize_and_handle_msg(void *img, size_t sz, void *data)
 {
     peer_connection_t *conn = data;
     msg_t m;
@@ -681,7 +669,7 @@ static int __deserialize_and_handle_msg(void *img, size_t sz, void *data)
     {
         msg_entry_t entry;
 
-        __deserialize_appendentries_payload(&entry, conn, img, sz);
+        deserialize_appendentries_payload(&entry, conn, img, sz);
 
         conn->ae.ae.entries = &entry;
         msg_t msg = {.type = MSG_APPENDENTRIES_RESPONSE};
@@ -848,7 +836,7 @@ static void peer_read_cb(uv_stream_t *tcp, ssize_t nread, const uv_buf_t *buf)
         assert(conn);
         uv_mutex_lock(&sv->raft_lock);
         tpl_gather(TPL_GATHER_MEM, buf->base, nread, &conn->gt,
-                   __deserialize_and_handle_msg, conn);
+                   deserialize_and_handle_msg, conn);
         uv_mutex_unlock(&sv->raft_lock);
     }
 }
@@ -868,7 +856,7 @@ static void send_handshake(peer_connection_t *conn)
     char buf[RAFT_BUFLEN];
     msg_t msg = {};
     msg.type = MSG_HANDSHAKE;
-    msg.hs.raft_port = atoi(opts.port);
+    msg.hs.raft_port = atoi(opts.raft_port);
     msg.hs.node_id = sv->node_id;
     peer_msg_send(conn->stream, tpl_map("S(I$(IIII))", &msg), &bufs[0], buf);
 }
@@ -1297,7 +1285,7 @@ static int load_opts(server_t *sv, options_t *opts)
 {
     kv_db_t *db = sv->db;
     sv->node_id=  *(int *)kv_db_get(db,SCHEMA_STATE, "id", 2);
-    opts->port = (char *)kv_db_get(db,SCHEMA_STATE,  "port", 4);
+    opts->raft_port = (char *)kv_db_get(db,SCHEMA_STATE,  "raft_port", 4);
     return 0;
 }
 
@@ -1310,7 +1298,7 @@ static void drop_kv_db(server_t *sv)
     for (; i < count; i++)
     {
         char *schema_name = sys_schemas_meta[i];
-        kv_schema_t *schema = kv_db_fetch_schema(db, schema_name);
+        kv_schema_t *schema = (db, schema_name);
         kv_db_unregister_schema(db, schema_name);
         kv_schema_destroy(schema);
     }
@@ -1390,7 +1378,7 @@ static void save_opts(server_t *sv, options_t *opts)
 {
     kv_db_t *db = sv->db;
     kv_db_set(db,sys_schemas_meta[SCHEMA_STATE_IDX],"id",2,&sv->node_id,sizeof(sv->node_id));
-    kv_db_set(db,sys_schemas_meta[SCHEMA_STATE_IDX],"port",4,&opts->port,sizeof(opts->port));
+    kv_db_set(db,sys_schemas_meta[SCHEMA_STATE_IDX],"raft_port",4,&opts->raft_port,sizeof(opts->raft_port));
 
 }
 
@@ -1454,7 +1442,7 @@ int main(int argc, char **argv)
         new_kv_db(sv);
         save_opts(sv, &opts);
 
-        start_peer_socket(sv, opts.host, atoi(opts.port), &peer_listen);
+        start_peer_socket(sv, opts.host, atoi(opts.raft_port), &peer_listen);
 
         if (opts.type_info.type==OPTION_START)
         {
@@ -1465,7 +1453,7 @@ int main(int argc, char **argv)
              * first configuration is for a cluster of 1 node. */
             append_cfg_change(sv, RAFT_LOGTYPE_ADD_NODE,
                                 opts.host,
-                                atoi(opts.port),
+                                atoi(opts.raft_port),
                                 sv->node_id);
         }
         else
@@ -1481,7 +1469,7 @@ int main(int argc, char **argv)
     /* Reload cluster information and rejoin cluster */
     else
     {
-        start_peer_socket(sv, opts.host, atoi(opts.port), &peer_listen);
+        start_peer_socket(sv, opts.host, atoi(opts.raft_port), &peer_listen);
         load_commit_log(sv);
         load_persistent_state(sv);
 

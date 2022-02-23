@@ -30,7 +30,8 @@ typedef struct
 	char *database_dir;
 	char *database_name;
 	char *pid_file;
-	char *port;
+	char *raft_port;
+	char *service_port;
 	/* arguments */
 	char *PEER;
 

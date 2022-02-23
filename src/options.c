@@ -28,6 +28,9 @@ int options_init(options_t *opts, int argc, char *argv[])
       {"join", required_argument, 0, 'j'},
       {"leave", required_argument, 0, 'l'},
       {0, 0, 0, 0}};
+
+  char service_port[32] = {'\0'};
+  int i_service_port = 0;
   while ((c = getopt_long(argc, argv, "s:i:j:l",
                           long_options, &long_index)) != -1)
   {
@@ -41,7 +44,10 @@ int options_init(options_t *opts, int argc, char *argv[])
       }
       *tmp_ptr++ = '\0';
       opts->host = strdup(arg_ptr);
-      opts->port = strdup(tmp_ptr + 1);
+      opts->raft_port = strdup(tmp_ptr + 1);
+      i_service_port = atoi(opts->raft_port)+1;
+      snprintf(&service_port, 32, "%d", i_service_port);
+      opts->service_port = strdup(&service_port);
       free(arg_ptr);
       arg_ptr = NULL;
     }
@@ -76,9 +82,11 @@ void options_dump(options_t *opt)
 {
   if (opt != NULL)
   {
-    fprintf(stdout, "host:%s\n", opt->host);
-    fprintf(stdout, "port:%s\n", opt->host);
     fprintf(stdout, "id:%s\n", opt->id);
+
+    fprintf(stdout, "host:%s\n", opt->host);
+    fprintf(stdout, "raft_port:%s\n", opt->raft_port);
+    fprintf(stdout, "service_port:%s\n", opt->service_port);
     fprintf(stdout, "type:%s-%d\n", opt->type_info.name, opt->type_info.type);
   }
 }
