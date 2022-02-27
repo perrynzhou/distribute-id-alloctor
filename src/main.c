@@ -238,13 +238,6 @@ static void peer_msg_send(uv_stream_t *s, tpl_node *tn, uv_buf_t *buf, char *dat
 /** Check if the ticket has already been issued
  * @return 0 if not unique; otherwise 1 */
 static int check_if_ticket_exists(kv_db_t *db,const unsigned int *ticket)
-{
-    MDB_txn *txn;
-
-    int e = mdb_txn_begin(sv->db_env, NULL, MDB_RDONLY, &txn);
-    if (0 != e)
-        mdb_fatal(e);
-
 
     void *ptr = kv_db_get(db,sys_schemas_meta[SCHEMA_DOCS_IDX],"ticket",6);
     if(ptr==NULL) {
@@ -537,16 +530,6 @@ static int raft_applylog_func(
     raft_entry_t *ety)
 {
 
-    
-    MDB_txn *txn;
-
-    MDB_val key = {.mv_size = ety->data.len, .mv_data = ety->data.buf};
-    MDB_val val = {.mv_size = 0, .mv_data = "\0"};
-
-    int e = mdb_txn_begin(sv->db_env, NULL, 0, &txn);
-    if (0 != e) 
-        mdb_fatal(e);
-
     /* Check if it's a configuration change */
     if (raft_entry_is_cfg_change(ety))
     {
@@ -558,30 +541,14 @@ static int raft_applylog_func(
         send_leave_response(conn);
         goto commit;
     }
-
-    /* This log affects the ticketd state machine */
-    e = mdb_put(txn, sv->tickets, &key, &val, 0);
-    switch (e)
-    {
-    case 0:
-        break;
-    case MDB_MAP_FULL:
-    {
-        mdb_txn_abort(txn);
-        return -1;
-    }
-    default:
-        mdb_fatal(e);
-    }
-
+    kv_db_t *db = sv->db;
+    kv_db_set(db,sys_schemas_meta[SCHEMA_DOCS_IDX], ety->data.buf, ety->data.len,"\0",0);
 commit:
     /* We save the commit idx for performance reasons.
      * Note that Raft doesn't require this as it can figure it out itself. */
-    e = mdb_puts_int(txn, sv->state, "commit_idx", raft_get_commit_idx(raft));
+    int commit_idx = raft_get_commit_idx(raft);
+    kv_db_set(db,sys_schemas_meta[SCHEMA_STATE_IDX], "commit_idx",10, &commit_idx,sizeof(int));
 
-    e = mdb_txn_commit(txn);
-    if (0 != e)
-        mdb_fatal(e);
 
     return 0;
 }
@@ -593,7 +560,9 @@ static int raft_persist_term_func(
     void *udata,
     const int current_term)
 {
-    return mdb_puts_int_commit(sv->db_env, sv->state, "term", current_term);
+    kv_db_t *db = sv->db;
+    return kv_db_set(db,sys_schemas_meta[SCHEMA_STATE_IDX], "term",4, &current_term,sizeof(int));
+
 }
 
 /** Raft callback for saving voted_for field to disk.
@@ -603,7 +572,9 @@ static int raft_persist_vote_func(
     void *udata,
     const int voted_for)
 {
-    return mdb_puts_int_commit(sv->db_env, sv->state, "voted_for", voted_for);
+    
+    kv_db_t *db = sv->db;
+    return kv_db_set(db,sys_schemas_meta[SCHEMA_STATE_IDX], "voted_for",9, &voted_for,sizeof(int)); 
 }
 
 static void peer_alloc_cb(uv_handle_t *handle, size_t size, uv_buf_t *buf)
@@ -1436,7 +1407,7 @@ int main(int argc, char **argv)
     /* add self */
     raft_add_node(sv->raft, NULL, sv->node_id, 1);
 
-    if(opts.type_info.type==OPTION_START ||opts.type_info.type==OPTION_JOIN  )
+    if(opts.type_info.type==OPTION_START ||opts.type_info.type==OPTION_JOIN)
     {
         drop_kv_db(sv);
         new_kv_db(sv);
