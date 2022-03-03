@@ -111,7 +111,10 @@ raft_entry_t* log_get_from_idx(log_t* me_, int idx, int *n_etys)
     assert(0 <= idx - 1);
 
     if (me->base + me->count < idx || idx < me->base)
+    {
         return NULL;
+    }
+      
 
     /* idx starts at 1 */
     idx -= 1;
@@ -120,10 +123,14 @@ raft_entry_t* log_get_from_idx(log_t* me_, int idx, int *n_etys)
 
     int logs_till_end_of_log;
 
-    if (i < me->back)
+    if (i < me->back) {
         logs_till_end_of_log = me->back - i;
-    else
+
+    }
+    else{
         logs_till_end_of_log = me->size - i;
+
+    }
 
     *n_etys = logs_till_end_of_log;
     return &me->entries[i];
@@ -136,8 +143,10 @@ raft_entry_t* log_get_at_idx(log_t* me_, int idx)
 
     assert(0 <= idx - 1);
 
-    if (me->base + me->count < idx || idx < me->base)
+    if (me->base + me->count < idx || idx < me->base){
         return NULL;
+    }
+       
 
     /* idx starts at 1 */
     idx -= 1;

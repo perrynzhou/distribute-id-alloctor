@@ -638,8 +638,10 @@ int raft_send_appendentries(raft_server_t* me_, raft_node_t* node)
     assert(node);
     assert(node != me->node);
 
-    if (!(me->cb.send_appendentries))
+    if (!(me->cb.send_appendentries)) {
         return -1;
+    }
+       
 
     msg_appendentries_t ae;
     ae.term = me->current_term;

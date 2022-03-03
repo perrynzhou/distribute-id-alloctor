@@ -27,6 +27,7 @@ int options_init(options_t *opts, int argc, char *argv[])
       {"id", required_argument, 0, 'i'},
       {"join", required_argument, 0, 'j'},
       {"leave", required_argument, 0, 'l'},
+      {"peer", required_argument, 0, 'p'},
       {0, 0, 0, 0}};
 
   char service_port[32] = {'\0'};
@@ -70,9 +71,16 @@ int options_init(options_t *opts, int argc, char *argv[])
       opts->type_info.name = strdup("join");
       opts->type_info.type = OPTION_JOIN;
       break;
+    case 'p':
+      opts->peer = strdup(arg_ptr);
+      break; 
     }
   }
   if (opts->host == NULL || (opts->type_info.type < OPTION_START || opts->type_info.type > OPTION_LEAVE))
+  {
+    return -1;
+  }
+  if(opts->type_info.type < OPTION_JOIN && opts->peer==NULL)
   {
     return -1;
   }
