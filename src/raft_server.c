@@ -94,8 +94,10 @@ void raft_become_leader(raft_server_t* me_)
     for (i = 0; i < me->num_nodes; i++)
     {
         if (me->node == me->nodes[i] || !raft_node_is_voting(me->nodes[i]))
+        {
             continue;
 
+        }
         raft_node_t* node = me->nodes[i];
         raft_node_set_next_idx(node, raft_get_current_idx(me_) + 1);
         raft_node_set_match_idx(node, 0);
@@ -544,14 +546,18 @@ int raft_recv_entry(raft_server_t* me_,
     {
         if (me->node == me->nodes[i] || !me->nodes[i] ||
             !raft_node_is_voting(me->nodes[i]))
-            continue;
+            {
+                continue;
+            }
 
         /* Only send new entries.
          * Don't send the entry to peers who are behind, to prevent them from
          * becoming congested. */
         int next_idx = raft_node_get_next_idx(me->nodes[i]);
-        if (next_idx == raft_get_current_idx(me_))
+        if (next_idx == raft_get_current_idx(me_)) 
+        {
             raft_send_appendentries(me_, me->nodes[i]);
+        }
     }
 
     /* if we're the only node, we can consider the entry committed */
@@ -660,8 +666,9 @@ int raft_send_appendentries(raft_server_t* me_, raft_node_t* node)
     {
         raft_entry_t* prev_ety = raft_get_entry_from_idx(me_, next_idx - 1);
         ae.prev_log_idx = next_idx - 1;
-        if (prev_ety)
+        if (prev_ety){
             ae.prev_log_term = prev_ety->term;
+        }
     }
 
     __log(me_, node, "sending appendentries node: ci:%d t:%d lc:%d pli:%d plt:%d",
@@ -703,8 +710,9 @@ raft_node_t* raft_add_node(raft_server_t* me_, void* udata, int id, int is_self)
     me->nodes = (raft_node_t*)realloc(me->nodes, sizeof(raft_node_t*) * me->num_nodes);
     me->nodes[me->num_nodes - 1] = raft_node_new(udata, id);
     assert(me->nodes[me->num_nodes - 1]);
-    if (is_self)
+    if (is_self) {
         me->node = me->nodes[me->num_nodes - 1];
+    }
 
     return me->nodes[me->num_nodes - 1];
 }
@@ -766,8 +774,9 @@ void raft_vote_for_nodeid(raft_server_t* me_, const int nodeid)
     raft_server_private_t* me = (raft_server_private_t*)me_;
 
     me->voted_for = nodeid;
-    if (me->cb.persist_vote)
+    if (me->cb.persist_vote) {
         me->cb.persist_vote(me_, me->udata, nodeid);
+    }
 }
 
 int raft_msg_entry_response_committed(raft_server_t* me_,

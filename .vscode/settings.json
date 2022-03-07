@@ -2,6 +2,8 @@
     "files.associations": {
         "tpl.h": "c",
         "typeinfo": "c",
-        "unistd.h": "c"
+        "unistd.h": "c",
+        "locale": "c",
+        "string": "c"
     }
 }

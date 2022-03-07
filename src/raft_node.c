@@ -99,10 +99,12 @@ int raft_node_has_vote_for_me(raft_node_t* me_)
 void raft_node_set_voting(raft_node_t* me_, int voting)
 {
     raft_node_private_t* me = (raft_node_private_t*)me_;
-    if (voting)
+    if (voting){
         me->flags |= RAFT_NODE_VOTING;
-    else
+    }
+    else{
         me->flags &= ~RAFT_NODE_VOTING;
+    }
 }
 
 int raft_node_is_voting(raft_node_t* me_)

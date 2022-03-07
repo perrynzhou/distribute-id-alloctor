@@ -18,6 +18,10 @@
 #define SCHEMA_LIMIT (1024)
 
 
+typedef  struct {
+   void *key;
+   void *val;
+}kv_t;
 typedef struct
 {
 
@@ -38,9 +42,10 @@ typedef struct
   // struct kv_schema **schema_ctx;
 } kv_db_t;
 
-
+typedef int (*kv_func)(void *,void *) kv_func_cb;
 
 kv_schema_t *kv_schema_alloc(const char *name, void *ctx,bool is_force_drop);
+
 void kv_schema_destroy(kv_schema_t *schema);
 
 kv_db_t *kv_db_alloc(const char *database_name, const char *database_dir);
@@ -49,8 +54,10 @@ kv_schema_t *kv_db_fetch_schema(kv_db_t *db, char *schema_name);
 int kv_db_register_schema(kv_db_t *db, kv_schema_t *schema);
 void kv_db_unregister_schema(kv_db_t *db, char *schema_name);
 // key and value operation
-int kv_db_set(kv_db_t *db, char *schema_name, void *key, size_t key_sz, void *val,size_t val_sz);
-void *kv_db_get(kv_db_t *db, char *schema_name, void *key,size_t key_sz);
-int kv_db_del(kv_db_t *db, char *schema_name, void *key,size_t key_sz);
+int kv_db_set(kv_schema_t *schema, void *key, size_t key_sz, void *val,size_t val_sz);
+void *kv_db_get(kv_schema_t *schema, void *key,size_t key_sz);
+int kv_db_del(kv_schema_t *schema, void *key,size_t key_sz);
+void *kv_db_fetch_top_index(kv_schema_t *schema,uint32_t index);
+int  kv_db_fetch_all(kv_schema_t *schema,kv_func_cb cb);
 void *kv_db_destroy(kv_db_t *db);
 #endif

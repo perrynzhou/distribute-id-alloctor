@@ -31,6 +31,7 @@ typedef struct
 	char *database_name;
 	char *pid_file;
 	char *raft_port;
+	char *http_port;
 	char *service_port;
 	// 主节点的地址
 	char *peer;
